@@ -9,6 +9,7 @@ license = "Apache-2.0 AND BSD-3-Clause"
 default = ["elf"]
 elf = []
 bzimage = []
+arm64_pe = []
 
 [dependencies.vm-memory]
 git = "https://github.com/rust-vmm/vm-memory"
