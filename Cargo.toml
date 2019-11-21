@@ -9,6 +9,7 @@ license = "Apache-2.0 AND BSD-3-Clause"
 default = ["elf"]
 elf = []
 bzimage = []
+aarch64_pe = []
 
 [dependencies]
 vm-memory = {version = "0.1.0", features = ["backend-mmap"]}
