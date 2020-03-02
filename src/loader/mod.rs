@@ -21,8 +21,6 @@ extern crate vm_memory;
 use std::error::{self, Error as KernelLoaderError};
 use std::ffi::CStr;
 use std::fmt::{self, Display};
-#[cfg(any(feature = "elf", feature = "bzimage"))]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use std::io::SeekFrom;
 use std::io::{Read, Seek};
 #[cfg(feature = "elf")]
@@ -51,8 +49,6 @@ pub mod start_info;
 #[allow(non_upper_case_globals)]
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::all))]
 mod elf;
-#[cfg(any(feature = "elf", feature = "bzimage"))]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod struct_util;
 
 #[derive(Debug, PartialEq)]
@@ -76,6 +72,10 @@ pub enum Error {
     InvalidEntryAddress,
     /// Invalid bzImage binary.
     InvalidBzImage,
+    /// Invalid Image binary.
+    InvalidImage,
+    /// Invalid Image magic number.
+    InvalidImageMagicNumber,
     /// Invalid kernel start address.
     InvalidKernelStartAddress,
     /// Memory to load kernel image is too small.
@@ -90,6 +90,8 @@ pub enum Error {
     ReadBzImageHeader,
     /// Unable to read bzImage compressed image.
     ReadBzImageCompressedKernel,
+    /// Unable to read Image header
+    ReadImageHeader,
     /// Unable to seek to kernel start.
     SeekKernelStart,
     /// Unable to seek to ELF start.
@@ -102,6 +104,10 @@ pub enum Error {
     SeekBzImageHeader,
     /// Unable to seek to bzImage compressed kernel.
     SeekBzImageCompressedKernel,
+    /// Unable to seek to Image end.
+    SeekImageEnd,
+    /// Unable to seek to Image header.
+    SeekImageHeader,
     /// Unable to seek to note header.
     SeekNoteHeader,
     /// Unable to read note header.
@@ -128,11 +134,14 @@ impl error::Error for Error {
             Error::InvalidEntryAddress => "Invalid entry address",
             Error::InvalidBzImage => "Invalid bzImage",
             Error::InvalidKernelStartAddress => "Invalid kernel start address",
+            Error::InvalidImage => "Invalid Image",
+            Error::InvalidImageMagicNumber => "Invalid Image magic number",
             Error::MemoryOverflow => "Memory to load kernel image is not enough",
             Error::ReadElfHeader => "Unable to read elf header",
             Error::ReadKernelImage => "Unable to read kernel image",
             Error::ReadProgramHeader => "Unable to read program header",
             Error::ReadBzImageHeader => "Unable to read bzImage header",
+            Error::ReadImageHeader => "Unable to read Image header",
             Error::ReadBzImageCompressedKernel => "Unable to read bzImage compressed kernel",
             Error::SeekKernelStart => "Unable to seek to kernel start",
             Error::SeekElfStart => "Unable to seek to elf start",
@@ -143,6 +152,8 @@ impl error::Error for Error {
             Error::SeekNoteHeader => "Unable to seek to note header",
             Error::ReadNoteHeader => "Unable to read note header",
             Error::InvalidPvhNote => "Invalid PVH note header",
+            Error::SeekImageEnd => "Unable to seek Image end",
+            Error::SeekImageHeader => "Unable to seek image header",
         }
     }
 }
@@ -522,6 +533,101 @@ fn align_up(addr: u64, align: u64) -> usize {
         addr as usize // already aligned
     } else {
         ((addr | align_mask) + 1) as usize
+    }
+}
+
+#[cfg(feature = "pe")]
+#[cfg(target_arch = "aarch64")]
+/// ARM64 Image (PE) format support
+pub struct PE;
+
+#[cfg(feature = "pe")]
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+// See kernel doc Documentation/arm64/booting.txt for more information.
+// All these fields should be little endian.
+struct arm64_image_header {
+    code0: u32,
+    code1: u32,
+    text_offset: u64,
+    image_size: u64,
+    flags: u64,
+    res2: u64,
+    res3: u64,
+    res4: u64,
+    magic: u32,
+    res5: u32,
+}
+
+#[cfg(feature = "pe")]
+#[cfg(target_arch = "aarch64")]
+impl KernelLoader for PE {
+    /// Loads a PE Image into guest memory.
+    ///
+    /// # Arguments
+    ///
+    /// * `guest_mem` - The guest memory where the kernel image is loaded.
+    /// * `kernel_start` - The offset into 'guest_mem' at which to load the kernel.
+    /// * `kernel_image` - Input Image image.
+    /// * `highmem_start_address` - ignored on ARM64
+    ///
+    /// # Returns
+    /// * KernelLoaderResult
+    fn load<F, M: GuestMemory>(
+        guest_mem: &M,
+        kernel_start: Option<GuestAddress>,
+        kernel_image: &mut F,
+        _highmem_start_address: Option<GuestAddress>,
+    ) -> Result<KernelLoaderResult>
+    where
+        F: Read + Seek,
+    {
+        let kernel_size = kernel_image
+            .seek(SeekFrom::End(0))
+            .map_err(|_| Error::SeekImageEnd)? as usize;
+        let mut arm64_header: arm64_image_header = Default::default();
+        kernel_image
+            .seek(SeekFrom::Start(0))
+            .map_err(|_| Error::SeekImageHeader)?;
+        unsafe {
+            // read_struct is safe when reading a POD struct.  It can be used and dropped without issue.
+            struct_util::read_struct(kernel_image, &mut arm64_header)
+                .map_err(|_| Error::ReadImageHeader)?;
+        }
+
+        if u32::from_le(arm64_header.magic) != 0x644d_5241 {
+            return Err(Error::InvalidImageMagicNumber);
+        }
+
+        let image_size = u64::from_le(arm64_header.image_size);
+        let mut text_offset = u64::from_le(arm64_header.text_offset);
+
+        if image_size == 0 {
+            text_offset = 0x80000;
+        }
+
+        let mem_offset = kernel_start
+            .unwrap_or(GuestAddress(0))
+            .checked_add(text_offset)
+            .ok_or(Error::InvalidImage)?;
+
+        let mut loader_result: KernelLoaderResult = Default::default();
+        loader_result.kernel_load = mem_offset;
+
+        kernel_image
+            .seek(SeekFrom::Start(0))
+            .map_err(|_| Error::SeekImageHeader)?;
+        guest_mem
+            .read_exact_from(mem_offset, kernel_image, kernel_size)
+            .map_err(|_| Error::ReadKernelImage)?;
+
+        loader_result.kernel_end = mem_offset
+            .raw_value()
+            .checked_add(kernel_size as GuestUsize)
+            .ok_or(Error::MemoryOverflow)?;
+
+        Ok(loader_result)
     }
 }
 
