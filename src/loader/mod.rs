@@ -35,6 +35,7 @@ use vm_memory::{Address, Bytes, GuestAddress, GuestMemory, GuestUsize};
 #[allow(non_upper_case_globals)]
 #[allow(missing_docs)]
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::all))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub mod bootparam;
 
 #[cfg(feature = "elf")]
@@ -178,6 +179,7 @@ pub struct KernelLoaderResult {
     pub kernel_end: GuestUsize,
     /// This field is only for bzImage following https://www.kernel.org/doc/Documentation/x86/boot.txt
     /// VMM should make use of it to fill zero page for bzImage direct boot.
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     pub setup_header: Option<bootparam::setup_header>,
     /// This field optionally holds the address of a PVH entry point, indicating that
     /// the kernel supports the PVH boot protocol as described in:
