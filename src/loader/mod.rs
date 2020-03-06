@@ -61,6 +61,8 @@ pub enum Error {
     CommandLineCopy,
     /// Command line overflowed guest memory.
     CommandLineOverflow,
+    /// Device tree binary too big.
+    DtbTooBig,
     /// Invalid ELF magic number
     InvalidElfMagicNumber,
     /// Invalid program header size.
@@ -93,6 +95,8 @@ pub enum Error {
     ReadBzImageCompressedKernel,
     /// Unable to read Image header
     ReadImageHeader,
+    /// Unable to read DTB image
+    ReadDtbImage,
     /// Unable to seek to kernel start.
     SeekKernelStart,
     /// Unable to seek to ELF start.
@@ -109,6 +113,10 @@ pub enum Error {
     SeekImageEnd,
     /// Unable to seek to Image header.
     SeekImageHeader,
+    /// Unable to seek to DTB start.
+    SeekDtbStart,
+    /// Unable to seek to DTB end.
+    SeekDtbEnd,
     /// Unable to seek to note header.
     SeekNoteHeader,
     /// Unable to read note header.
@@ -128,6 +136,7 @@ impl error::Error for Error {
             }
             Error::CommandLineCopy => "Failed writing command line to guest memory",
             Error::CommandLineOverflow => "Command line overflowed guest memory",
+            Error::DtbTooBig => "Device tree image too big",
             Error::InvalidElfMagicNumber => "Invalid Elf magic number",
             Error::InvalidProgramHeaderSize => "Invalid program header size",
             Error::InvalidProgramHeaderOffset => "Invalid program header offset",
@@ -143,6 +152,7 @@ impl error::Error for Error {
             Error::ReadProgramHeader => "Unable to read program header",
             Error::ReadBzImageHeader => "Unable to read bzImage header",
             Error::ReadImageHeader => "Unable to read Image header",
+            Error::ReadDtbImage => "Unable to read DTB image",
             Error::ReadBzImageCompressedKernel => "Unable to read bzImage compressed kernel",
             Error::SeekKernelStart => "Unable to seek to kernel start",
             Error::SeekElfStart => "Unable to seek to elf start",
@@ -155,6 +165,8 @@ impl error::Error for Error {
             Error::InvalidPvhNote => "Invalid PVH note header",
             Error::SeekImageEnd => "Unable to seek Image end",
             Error::SeekImageHeader => "Unable to seek image header",
+            Error::SeekDtbStart => "Unable to seek DTB start",
+            Error::SeekDtbEnd => "Unable to seek DTB end",
         }
     }
 }
@@ -536,6 +548,36 @@ fn align_up(addr: u64, align: u64) -> usize {
     } else {
         ((addr | align_mask) + 1) as usize
     }
+}
+
+/// Writes the device tree to the given memory slice.
+///
+/// # Arguments
+///
+/// * `guest_mem` - A u8 slice that will be partially overwritten by the device tree blob.
+/// * `guest_addr` - The address in `guest_mem` at which to load the device tree blob.
+/// * `dtb_image` - The device tree blob.
+#[cfg(target_arch = "aarch64")]
+pub fn load_dtb<F, M: GuestMemory>(
+    guest_mem: &M,
+    guest_addr: GuestAddress,
+    dtb_image: &mut F,
+) -> Result<()>
+where
+    F: Read + Seek,
+{
+    let dtb_size = dtb_image
+        .seek(SeekFrom::End(0))
+        .map_err(|_| Error::SeekDtbEnd)? as usize;
+    if dtb_size > 0x200000 {
+        return Err(Error::DtbTooBig);
+    }
+    dtb_image
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| Error::SeekDtbStart)?;
+    guest_mem
+        .read_exact_from(guest_addr, dtb_image, dtb_size)
+        .map_err(|_| Error::ReadDtbImage)
 }
 
 #[cfg(feature = "pe")]
