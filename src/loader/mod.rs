@@ -49,6 +49,7 @@ pub mod start_info;
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::all))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod elf;
 mod struct_util;
 
