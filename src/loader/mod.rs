@@ -62,6 +62,7 @@ pub enum Error {
     /// Command line overflowed guest memory.
     CommandLineOverflow,
     /// Device tree binary too big.
+    #[cfg(target_arch = "aarch64")]
     DtbTooBig,
     /// Invalid ELF magic number
     InvalidElfMagicNumber,
@@ -76,8 +77,10 @@ pub enum Error {
     /// Invalid bzImage binary.
     InvalidBzImage,
     /// Invalid Image binary.
+    #[cfg(target_arch = "aarch64")]
     InvalidImage,
     /// Invalid Image magic number.
+    #[cfg(target_arch = "aarch64")]
     InvalidImageMagicNumber,
     /// Invalid kernel start address.
     InvalidKernelStartAddress,
@@ -94,8 +97,10 @@ pub enum Error {
     /// Unable to read bzImage compressed image.
     ReadBzImageCompressedKernel,
     /// Unable to read Image header
+    #[cfg(target_arch = "aarch64")]
     ReadImageHeader,
     /// Unable to read DTB image
+    #[cfg(target_arch = "aarch64")]
     ReadDtbImage,
     /// Unable to seek to kernel start.
     SeekKernelStart,
@@ -110,12 +115,16 @@ pub enum Error {
     /// Unable to seek to bzImage compressed kernel.
     SeekBzImageCompressedKernel,
     /// Unable to seek to Image end.
+    #[cfg(target_arch = "aarch64")]
     SeekImageEnd,
     /// Unable to seek to Image header.
+    #[cfg(target_arch = "aarch64")]
     SeekImageHeader,
     /// Unable to seek to DTB start.
+    #[cfg(target_arch = "aarch64")]
     SeekDtbStart,
     /// Unable to seek to DTB end.
+    #[cfg(target_arch = "aarch64")]
     SeekDtbEnd,
     /// Unable to seek to note header.
     SeekNoteHeader,
@@ -136,6 +145,7 @@ impl error::Error for Error {
             }
             Error::CommandLineCopy => "Failed writing command line to guest memory",
             Error::CommandLineOverflow => "Command line overflowed guest memory",
+            #[cfg(target_arch = "aarch64")]
             Error::DtbTooBig => "Device tree image too big",
             Error::InvalidElfMagicNumber => "Invalid Elf magic number",
             Error::InvalidProgramHeaderSize => "Invalid program header size",
@@ -144,14 +154,18 @@ impl error::Error for Error {
             Error::InvalidEntryAddress => "Invalid entry address",
             Error::InvalidBzImage => "Invalid bzImage",
             Error::InvalidKernelStartAddress => "Invalid kernel start address",
+            #[cfg(target_arch = "aarch64")]
             Error::InvalidImage => "Invalid Image",
+            #[cfg(target_arch = "aarch64")]
             Error::InvalidImageMagicNumber => "Invalid Image magic number",
             Error::MemoryOverflow => "Memory to load kernel image is not enough",
             Error::ReadElfHeader => "Unable to read elf header",
             Error::ReadKernelImage => "Unable to read kernel image",
             Error::ReadProgramHeader => "Unable to read program header",
             Error::ReadBzImageHeader => "Unable to read bzImage header",
+            #[cfg(target_arch = "aarch64")]
             Error::ReadImageHeader => "Unable to read Image header",
+            #[cfg(target_arch = "aarch64")]
             Error::ReadDtbImage => "Unable to read DTB image",
             Error::ReadBzImageCompressedKernel => "Unable to read bzImage compressed kernel",
             Error::SeekKernelStart => "Unable to seek to kernel start",
@@ -163,9 +177,13 @@ impl error::Error for Error {
             Error::SeekNoteHeader => "Unable to seek to note header",
             Error::ReadNoteHeader => "Unable to read note header",
             Error::InvalidPvhNote => "Invalid PVH note header",
+            #[cfg(target_arch = "aarch64")]
             Error::SeekImageEnd => "Unable to seek Image end",
+            #[cfg(target_arch = "aarch64")]
             Error::SeekImageHeader => "Unable to seek image header",
+            #[cfg(target_arch = "aarch64")]
             Error::SeekDtbStart => "Unable to seek DTB start",
+            #[cfg(target_arch = "aarch64")]
             Error::SeekDtbEnd => "Unable to seek DTB end",
         }
     }
